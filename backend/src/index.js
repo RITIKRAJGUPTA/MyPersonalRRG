@@ -1,65 +1,99 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import connectDB from './config/database.js';
-import authRoutes from './routes/authRoutes.js';
-import routineRoutes from './routes/routineRoutes.js';
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+
+import connectDB from "./config/database.js";
+import authRoutes from "./routes/authRoutes.js";
+import routineRoutes from "./routes/routineRoutes.js";
 
 dotenv.config();
 
-// Connect to MongoDB
+// Connect Database
 connectDB();
 
 const app = express();
-
-// CORS configuration
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  "https://your-frontend-app.netlify.app", // Replace with your deployed frontend URL
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-}));
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log all requests for debugging
+// CORS
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173", // Local development
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow Postman and server-to-server requests
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
+
+// Request Logger
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  console.log('Request body:', req.body);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log("Request body:", req.body);
   next();
 });
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/routine', routineRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/routine", routineRoutes);
 
-// Test route
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'Backend is working!' });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
-  res.status(500).json({
-    message: 'Something went wrong!',
-    error: err.message
+// Health Check
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "Routine Manager Backend Running Successfully",
   });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
+// Test Route
+app.get("/api/test", (req, res) => {
+  res.json({
+    success: true,
+    message: "API Working Successfully",
+  });
 });
+
+// 404 Route
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route Not Found",
+  });
+});
+
+// Error Handler
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
+
+// Local Development Only
+const PORT = process.env.PORT || 5000;
+
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+// Export for Vercel
+export default app;
