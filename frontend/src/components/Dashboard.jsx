@@ -166,7 +166,7 @@ const Dashboard = () => {
         const year = selectedYear;
         const month = parseInt(selectedMonth) - 1;
         startDate = new Date(year, month, 1);
-        endDate = new Date(year, month + 1, 0);
+        endDate = new Date(year, month + 1, 1);
       } else if (filterType === 'week') {
         const weekNum = parseInt(selectedWeek);
         const firstDayOfYear = new Date(selectedYear, 0, 1);
@@ -202,7 +202,7 @@ const Dashboard = () => {
       const year = reportYear;
       const month = parseInt(reportMonth) - 1;
       const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 0);
+      const endDate = new Date(year, month + 1, 1);
 
       const start = startDate.toISOString().split('T')[0];
       const end = endDate.toISOString().split('T')[0];
