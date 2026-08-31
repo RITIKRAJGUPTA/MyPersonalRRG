@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx'; // Add this import
 import api from '../config/api';
 
 const Dashboard = () => {
@@ -41,6 +42,11 @@ const Dashboard = () => {
   const [selectedWeek, setSelectedWeek] = useState('');
   const [selectedDateFilter, setSelectedDateFilter] = useState('');
 
+  // New state for month selection for report download
+  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
+  const [reportYear, setReportYear] = useState(new Date().getFullYear());
+  const [downloadingReport, setDownloadingReport] = useState(false);
+
   useEffect(() => {
     const userInfo = localStorage.getItem('userInfo');
     if (!userInfo) {
@@ -75,6 +81,8 @@ const Dashboard = () => {
     const now = new Date();
     setSelectedYear(now.getFullYear());
     setSelectedMonth(now.getMonth() + 1);
+    setReportYear(now.getFullYear());
+    setReportMonth(now.getMonth() + 1);
     
     const firstDayOfYear = new Date(now.getFullYear(), 0, 1);
     const pastDaysOfYear = (now - firstDayOfYear) / 86400000;
@@ -184,6 +192,113 @@ const Dashboard = () => {
       console.error('History fetch error:', error);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  // NEW: Function to download monthly report as Excel
+  const downloadMonthlyReport = async () => {
+    setDownloadingReport(true);
+    try {
+      const year = reportYear;
+      const month = parseInt(reportMonth) - 1;
+      const startDate = new Date(year, month, 1);
+      const endDate = new Date(year, month + 1, 0);
+
+      const start = startDate.toISOString().split('T')[0];
+      const end = endDate.toISOString().split('T')[0];
+
+      const response = await api.get(`/routine/range/${start}/${end}`);
+      const data = response.data.data || [];
+
+      if (data.length === 0) {
+        toast.error('No data found for the selected month');
+        setDownloadingReport(false);
+        return;
+      }
+
+      // Prepare data for Excel
+      const excelData = data.map((item) => ({
+        'Date': new Date(item.date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        }),
+        'Food': item.expenses.food || 0,
+        'Grocery': item.expenses.grocery || 0,
+        'Chai/Coffee': item.expenses.chaiCoffee || 0,
+        'Fast Food': item.expenses.fastFood || 0,
+        'Transport': item.expenses.transport || 0,
+        'Bills/Recharge': item.expenses.bills || 0,
+        'Shopping': item.expenses.shopping || 0,
+        'Entertainment': item.expenses.entertainment || 0,
+        'Sent Money': item.expenses.sentMoney || 0,
+        'Loan Repayment': item.expenses.loanRepayment || 0,
+        'Extra': item.expenses.extra || 0,
+        'Other': item.expenses.other || 0,
+        'Total': item.totalExpenses || 0,
+        'Thought': item.thought || ''
+      }));
+
+      // Calculate totals
+      const totals = {
+        'Date': 'TOTAL',
+        'Food': excelData.reduce((sum, row) => sum + row['Food'], 0),
+        'Grocery': excelData.reduce((sum, row) => sum + row['Grocery'], 0),
+        'Chai/Coffee': excelData.reduce((sum, row) => sum + row['Chai/Coffee'], 0),
+        'Fast Food': excelData.reduce((sum, row) => sum + row['Fast Food'], 0),
+        'Transport': excelData.reduce((sum, row) => sum + row['Transport'], 0),
+        'Bills/Recharge': excelData.reduce((sum, row) => sum + row['Bills/Recharge'], 0),
+        'Shopping': excelData.reduce((sum, row) => sum + row['Shopping'], 0),
+        'Entertainment': excelData.reduce((sum, row) => sum + row['Entertainment'], 0),
+        'Sent Money': excelData.reduce((sum, row) => sum + row['Sent Money'], 0),
+        'Loan Repayment': excelData.reduce((sum, row) => sum + row['Loan Repayment'], 0),
+        'Extra': excelData.reduce((sum, row) => sum + row['Extra'], 0),
+        'Other': excelData.reduce((sum, row) => sum + row['Other'], 0),
+        'Total': excelData.reduce((sum, row) => sum + row['Total'], 0),
+        'Thought': ''
+      };
+
+      excelData.push(totals);
+
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 15 }, // Date
+        { wch: 10 }, // Food
+        { wch: 10 }, // Grocery
+        { wch: 12 }, // Chai/Coffee
+        { wch: 12 }, // Fast Food
+        { wch: 12 }, // Transport
+        { wch: 14 }, // Bills/Recharge
+        { wch: 12 }, // Shopping
+        { wch: 16 }, // Entertainment
+        { wch: 14 }, // Sent Money
+        { wch: 18 }, // Loan Repayment
+        { wch: 10 }, // Extra
+        { wch: 10 }, // Other
+        { wch: 12 }, // Total
+        { wch: 30 } // Thought
+      ];
+      ws['!cols'] = colWidths;
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Monthly Report');
+
+      // Generate filename
+      const monthName = new Date(year, month).toLocaleString('default', { month: 'long' });
+      const fileName = `Expense_Report_${monthName}_${year}.xlsx`;
+
+      // Download
+      XLSX.writeFile(wb, fileName);
+      toast.success(`Report downloaded successfully!`);
+    } catch (error) {
+      toast.error('Failed to download report');
+      console.error('Download error:', error);
+    } finally {
+      setDownloadingReport(false);
     }
   };
 
@@ -768,6 +883,72 @@ const Dashboard = () => {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* NEW: Monthly Report Download Section */}
+            <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+              <h3 className="text-md font-semibold text-green-800 mb-3">📊 Download Monthly Report</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                  <input
+                    type="number"
+                    value={reportYear}
+                    onChange={(e) => setReportYear(parseInt(e.target.value) || new Date().getFullYear())}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    min="2000"
+                    max="2100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => setReportMonth(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                  </select>
+                </div>
+                <div>
+                  <button
+                    onClick={downloadMonthlyReport}
+                    disabled={downloadingReport}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {downloadingReport ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Excel Report
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Downloads a detailed Excel report with all expense categories, daily breakdown, and monthly totals.
+              </p>
             </div>
 
             {/* History Table */}
