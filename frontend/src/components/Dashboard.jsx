@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import * as XLSX from 'xlsx'; // Add this import
+import * as XLSX from 'xlsx';
 import api from '../config/api';
 
 const Dashboard = () => {
@@ -166,7 +166,8 @@ const Dashboard = () => {
         const year = selectedYear;
         const month = parseInt(selectedMonth) - 1;
         startDate = new Date(year, month, 1);
-        endDate = new Date(year, month + 1, 1);
+        // ✅ FIX: use last day of the month (0 = last day of previous month)
+        endDate = new Date(year, month + 1, 0);
       } else if (filterType === 'week') {
         const weekNum = parseInt(selectedWeek);
         const firstDayOfYear = new Date(selectedYear, 0, 1);
@@ -195,14 +196,15 @@ const Dashboard = () => {
     }
   };
 
-  // NEW: Function to download monthly report as Excel
+  // Function to download monthly report as Excel
   const downloadMonthlyReport = async () => {
     setDownloadingReport(true);
     try {
       const year = reportYear;
       const month = parseInt(reportMonth) - 1;
       const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 1);
+      // ✅ FIX: use last day of the month
+      const endDate = new Date(year, month + 1, 0);
 
       const start = startDate.toISOString().split('T')[0];
       const end = endDate.toISOString().split('T')[0];
@@ -885,7 +887,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* NEW: Monthly Report Download Section */}
+            {/* Monthly Report Download Section */}
             <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
               <h3 className="text-md font-semibold text-green-800 mb-3">📊 Download Monthly Report</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
