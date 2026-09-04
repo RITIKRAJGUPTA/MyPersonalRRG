@@ -7,7 +7,7 @@ export const createOrUpdateRoutine = async (req, res) => {
     const { date, expenses, thought, expenseItems } = req.body;
     const userId = req.user.id;
 
-    const routineDate = date ? parseLocalDate(date) : new Date();
+    const routineDate = date ? new Date(date) : new Date();
     const startOfDay = new Date(routineDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(routineDate);
@@ -83,7 +83,7 @@ export const getRoutineByDate = async (req, res) => {
     const { date } = req.params;
     const userId = req.user.id;
 
-    const targetDate = parseLocalDate(date);
+    const targetDate = new Date(date);
     const startOfDay = new Date(targetDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(targetDate);
@@ -123,11 +123,10 @@ export const getRoutinesByDateRange = async (req, res) => {
     const { startDate, endDate } = req.params;
     const userId = req.user.id;
 
-   const start = parseLocalDate(startDate);
-start.setHours(0, 0, 0, 0);
-
-const end = parseLocalDate(endDate);
-end.setHours(23, 59, 59, 999);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
     const routines = await DailyRoutine.find({
       userId,
