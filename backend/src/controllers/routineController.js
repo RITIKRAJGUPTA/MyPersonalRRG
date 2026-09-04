@@ -123,14 +123,14 @@ export const getRoutinesByDateRange = async (req, res) => {
     const { startDate, endDate } = req.params;
     const userId = req.user.id;
 
-    // Parse as UTC (midnight UTC)
-    const start = new Date(startDate + 'T00:00:00.000Z');
-    const end = new Date(endDate + 'T00:00:00.000Z');  // end is the first day of the next month
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
-    // Use $gte for start, and $lt for end (exclusive)
     const routines = await DailyRoutine.find({
       userId,
-      date: { $gte: start, $lt: end }
+      date: { $gte: start, $lte: end }
     }).sort({ date: -1 });
 
     res.json({
@@ -138,6 +138,7 @@ export const getRoutinesByDateRange = async (req, res) => {
       data: routines,
       count: routines.length
     });
+
   } catch (error) {
     console.error('Get routines range error:', error);
     res.status(400).json({
@@ -194,8 +195,8 @@ export const getMonthlySummary = async (req, res) => {
     const { year, month } = req.params;
     const userId = req.user.id;
 
-     const startDate = new Date(Date.UTC(year, month - 1, 1));
-    const endDate = new Date(Date.UTC(year, month, 1));
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
     const routines = await DailyRoutine.find({
       userId,
