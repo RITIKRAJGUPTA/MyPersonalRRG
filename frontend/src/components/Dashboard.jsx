@@ -162,45 +162,55 @@ const Dashboard = () => {
   };
 
   const fetchHistory = async () => {
-    setHistoryLoading(true);
-    try {
-      let startDate, endDate;
+  setHistoryLoading(true);
 
-      if (filterType === "month") {
-        const year = selectedYear;
-        const month = parseInt(selectedMonth) - 1;
-        startDate = new Date(year, month, 1);
-        endDate = new Date(year, month + 1, 0);
-      } else if (filterType === "week") {
-        const weekNum = parseInt(selectedWeek);
-        const firstDayOfYear = new Date(selectedYear, 0, 1);
-        const daysOffset = (weekNum - 1) * 7;
-        startDate = new Date(
-          selectedYear,
-          0,
-          firstDayOfYear.getDay() + daysOffset,
-        );
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-      } else if (filterType === "date") {
-        startDate = new Date(selectedDateFilter);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(selectedDateFilter);
-        endDate.setHours(23, 59, 59, 999);
-      }
+  try {
+    let startDate, endDate;
 
-      const start = formatLocalDate(startDate);
-      const end = formatLocalDate(endDate);
-      const response = await api.get(`/routine/range/${start}/${end}`);
-      setHistoryData(response.data.data || []);
-      setShowHistory(true);
-    } catch (error) {
-      toast.error("Failed to fetch history");
-      console.error("History fetch error:", error);
-    } finally {
-      setHistoryLoading(false);
+    if (filterType === 'month') {
+      const year = selectedYear;
+      const month = parseInt(selectedMonth) - 1;
+
+      startDate = new Date(year, month, 1);
+      endDate = new Date(year, month + 1, 0);
+
+    } else if (filterType === 'week') {
+      const weekNum = parseInt(selectedWeek);
+      const firstDayOfYear = new Date(selectedYear, 0, 1);
+      const daysOffset = (weekNum - 1) * 7;
+
+      startDate = new Date(
+        selectedYear,
+        0,
+        firstDayOfYear.getDate() + daysOffset
+      );
+
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+
+    } else if (filterType === 'date') {
+      startDate = new Date(selectedDateFilter);
+      endDate = new Date(selectedDateFilter);
     }
-  };
+
+    // IMPORTANT: Don't use toISOString() here
+    const start = formatLocalDate(startDate);
+    const end = formatLocalDate(endDate);
+
+    console.log('Fetching history:', start, 'to', end);
+
+    const response = await api.get(`/routine/range/${start}/${end}`);
+
+    setHistoryData(response.data.data || []);
+    setShowHistory(true);
+
+  } catch (error) {
+    toast.error('Failed to fetch history');
+    console.error('History fetch error:', error);
+  } finally {
+    setHistoryLoading(false);
+  }
+};
 
   // NEW: Function to download monthly report as Excel
   const downloadMonthlyReport = async () => {
