@@ -46,6 +46,7 @@ const Dashboard = () => {
   const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [downloadingSummary, setDownloadingSummary] = useState(false);
 
   useEffect(() => {
     const userInfo = localStorage.getItem('userInfo');
@@ -157,6 +158,15 @@ const Dashboard = () => {
     }
   };
 
+  // Convert a local Date to YYYY-MM-DD without UTC timezone shifting.
+  // This prevents entries like 31-Aug from incorrectly appearing under September.
+  const formatDateForApi = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
@@ -166,7 +176,7 @@ const Dashboard = () => {
         const year = selectedYear;
         const month = parseInt(selectedMonth) - 1;
         startDate = new Date(year, month, 1);
-        endDate = new Date(year, month + 1, 1);
+        endDate = new Date(year, month + 1, 0);
       } else if (filterType === 'week') {
         const weekNum = parseInt(selectedWeek);
         const firstDayOfYear = new Date(selectedYear, 0, 1);
@@ -181,8 +191,8 @@ const Dashboard = () => {
         endDate.setHours(23, 59, 59, 999);
       }
 
-      const start = startDate.toISOString().split('T')[0];
-      const end = endDate.toISOString().split('T')[0];
+      const start = formatDateForApi(startDate);
+      const end = formatDateForApi(endDate);
 
       const response = await api.get(`/routine/range/${start}/${end}`);
       setHistoryData(response.data.data || []);
@@ -202,10 +212,10 @@ const Dashboard = () => {
       const year = reportYear;
       const month = parseInt(reportMonth) - 1;
       const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 1);
+      const endDate = new Date(year, month + 1, 0);
 
-      const start = startDate.toISOString().split('T')[0];
-      const end = endDate.toISOString().split('T')[0];
+      const start = formatDateForApi(startDate);
+      const end = formatDateForApi(endDate);
 
       const response = await api.get(`/routine/range/${start}/${end}`);
       const data = response.data.data || [];
@@ -299,6 +309,84 @@ const Dashboard = () => {
       console.error('Download error:', error);
     } finally {
       setDownloadingReport(false);
+    }
+  };
+
+  // Download only the monthly summary as an Excel file
+  const downloadMonthlySummary = async () => {
+    setDownloadingSummary(true);
+
+    try {
+      const year = reportYear;
+      const month = parseInt(reportMonth, 10);
+
+      const response = await api.get(`/routine/summary/${year}/${month}`);
+      const summary = response.data.data;
+
+      if (!summary) {
+        toast.error('No monthly summary found');
+        return;
+      }
+
+      const monthName = new Date(year, month - 1, 1).toLocaleString('default', {
+        month: 'long'
+      });
+
+      const summaryData = [
+        { Category: 'Food', Amount: summary.totalFood || 0 },
+        { Category: 'Grocery', Amount: summary.totalGrocery || 0 },
+        { Category: 'Chai/Coffee', Amount: summary.totalChaiCoffee || 0 },
+        { Category: 'Fast Food', Amount: summary.totalFastFood || 0 },
+        { Category: 'Transport', Amount: summary.totalTransport || 0 },
+        { Category: 'Bills/Recharge', Amount: summary.totalBills || 0 },
+        { Category: 'Shopping', Amount: summary.totalShopping || 0 },
+        { Category: 'Entertainment', Amount: summary.totalEntertainment || 0 },
+        { Category: 'Sent Money', Amount: summary.totalSentMoney || 0 },
+        { Category: 'Loan Repayment', Amount: summary.totalLoanRepayment || 0 },
+        { Category: 'Extra', Amount: summary.totalExtra || 0 },
+        { Category: 'Other', Amount: summary.totalOther || 0 },
+        { Category: 'TOTAL EXPENSES', Amount: summary.totalExpenses || 0 },
+        { Category: 'Daily Average', Amount: Number(summary.dailyAverage || 0).toFixed(2) },
+        { Category: 'Days with Entries', Amount: summary.daysWithEntries || 0 }
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(summaryData);
+      ws['!cols'] = [
+        { wch: 24 },
+        { wch: 18 }
+      ];
+
+      // Add a small title section above the summary table.
+      XLSX.utils.sheet_add_aoa(
+        ws,
+        [[`Monthly Summary - ${monthName} ${year}`], []],
+        { origin: 'A1' }
+      );
+
+      // Move the data table below the title.
+      const finalWs = XLSX.utils.aoa_to_sheet([
+        [`Monthly Summary - ${monthName} ${year}`],
+        [],
+        ['Category', 'Amount'],
+        ...summaryData.map(row => [row.Category, row.Amount])
+      ]);
+      finalWs['!cols'] = [
+        { wch: 24 },
+        { wch: 18 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, finalWs, 'Monthly Summary');
+
+      const fileName = `Monthly_Summary_${monthName}_${year}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      toast.success('Monthly summary downloaded successfully!');
+    } catch (error) {
+      toast.error('Failed to download monthly summary');
+      console.error('Monthly summary download error:', error);
+    } finally {
+      setDownloadingSummary(false);
     }
   };
 
@@ -888,7 +976,7 @@ const Dashboard = () => {
             {/* NEW: Monthly Report Download Section */}
             <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
               <h3 className="text-md font-semibold text-green-800 mb-3">📊 Download Monthly Report</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                   <input
@@ -945,9 +1033,33 @@ const Dashboard = () => {
                     )}
                   </button>
                 </div>
+                <div>
+                  <button
+                    onClick={downloadMonthlySummary}
+                    disabled={downloadingSummary}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {downloadingSummary ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Monthly Summary
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Downloads a detailed Excel report with all expense categories, daily breakdown, and monthly totals.
+                Download the detailed daily report or a separate monthly summary for the selected month.
               </p>
             </div>
 
